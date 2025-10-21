@@ -1,0 +1,23 @@
+CREATE TABLE users (
+    Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR (100) NOT NULL UNIQUE,
+    password VARCHAR(100) NOT NULL,
+    contact_number VARCHAR (12) NOT NULL,
+    role VARCHAR (25) NOT NULL DEFAULT 'user',
+    refresh_token VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE positions (
+    position_id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    position_code VARCHAR(100) NOT NULL,
+    position_name VARCHAR (300) NOT NULL,
+    id INT NOT NULL,
+    FOREIGN KEY (id) REFERENCES users (id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP 
+);
+
+  
+
+
