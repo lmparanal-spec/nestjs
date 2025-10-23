@@ -5,20 +5,11 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 @Injectable()
 export class UsersService {
-  deleteUser(arg0: number) {
-    throw new Error('Method not implemented.');
-  }
-  updateUser(arg0: number, body: any) {
-    throw new Error('Method not implemented.');
-  }
-  getAll() {
-    throw new Error('Method not implemented.');
-  }
   constructor(private readonly db: DatabaseService) {}
 
   private pool = () => this.db.getPool();
 
-  // Create user
+  // ✅ Create user
   async createUser(username: string, password: string, contact_number: string, role: string = 'user') {
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await this.pool().query<ResultSetHeader>(
@@ -28,7 +19,13 @@ export class UsersService {
     return { message: 'User created successfully', id: result.insertId };
   }
 
-  // Find user by username (for login)
+  // ✅ Get all users
+  async getAll() {
+    const [rows] = await this.pool().query<RowDataPacket[]>(`SELECT * FROM users`);
+    return rows;
+  }
+
+  // ✅ Find user by username (for login)
   async findByUsername(username: string) {
     const [rows] = await this.pool().query<RowDataPacket[]>(
       `SELECT * FROM users WHERE username = ?`,
@@ -37,7 +34,7 @@ export class UsersService {
     return rows.length ? rows[0] : null;
   }
 
-  // ✅ Find user by ID (fixes your error)
+  // ✅ Find user by ID
   async findById(id: number) {
     const [rows] = await this.pool().query<RowDataPacket[]>(
       `SELECT * FROM users WHERE id = ?`,
@@ -47,9 +44,36 @@ export class UsersService {
     return rows[0];
   }
 
-  // Get all users
-  async findAll() {
-    const [rows] = await this.pool().query<RowDataPacket[]>(`SELECT * FROM users`);
-    return rows;
+  // ✅ Update user
+  async updateUser(id: number, body: any) {
+    const { username, password, contact_number, role } = body;
+
+    // Optional: hash password if provided
+    let hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+
+    const [result] = await this.pool().query<ResultSetHeader>(
+      `UPDATE users 
+       SET 
+         username = COALESCE(?, username),
+         password = COALESCE(?, password),
+         contact_number = COALESCE(?, contact_number),
+         role = COALESCE(?, role)
+       WHERE id = ?`,
+      [username, hashedPassword, contact_number, role, id],
+    );
+
+    if (result.affectedRows === 0) throw new NotFoundException('User not found');
+    return { message: 'User updated successfully' };
+  }
+
+  // ✅ Delete user
+  async deleteUser(id: number) {
+    const [result] = await this.pool().query<ResultSetHeader>(
+      `DELETE FROM users WHERE id = ?`,
+      [id],
+    );
+
+    if (result.affectedRows === 0) throw new NotFoundException('User not found');
+    return { message: 'User deleted successfully' };
   }
 }
