@@ -1,21 +1,24 @@
+// Customized AuthModule importing Passport, JWT modules, and configuration for token expiration.
+// JWT secret and expiry values are loaded from environment variables.
+
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
-  imports: [
-    PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1h' },
-    }),
-    UsersModule,
-  ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+    imports: [
+        UsersModule,
+        PassportModule,
+        JwtModule.register({
+            secret: process.env.JWT_ACCESS_TOKEN_SECRET || 'access_secret',
+            signOptions: { expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '900s' },
+        }),
+    ],
+    providers: [AuthService, JwtStrategy],
+    controllers: [AuthController],
 })
 export class AuthModule {}

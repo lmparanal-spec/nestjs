@@ -1,7 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
+import { JwtService } from '@nestjs/jwt';
+import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class AuthService {
@@ -10,22 +11,77 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(username: string, password: string) {
+  // ✅ Validate user credentials
+  async validateUser(username: string, pass: string) {
     const user = await this.usersService.findByUsername(username);
-    if (!user) throw new UnauthorizedException('User not found');
+    if (!user) return null;
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) throw new UnauthorizedException('Invalid password');
+    const isPasswordValid = await bcrypt.compare(pass, user.password);
+    if (!isPasswordValid) return null;
 
-    const { password: _, ...result } = user;
-    return result;
+    return { id: user.id, username: user.username, role: user.role };
   }
 
-  async login(user: any) {
-    const payload = { username: user.username, sub: user.id };
-    return {
-      message: 'Login successful',
-      access_token: this.jwtService.sign(payload),
-    };
+  // ✅ Login and issue access + refresh tokens
+  async login(user: { id: number; username: string; role: string }) {
+    const payload = { sub: user.id, username: user.username, role: user.role };
+
+    // ✅ Generate Access Token (using JWT_SECRET)
+    const accessToken = this.jwtService.sign(payload);
+
+    // ✅ Generate Refresh Token (using a separate secret)
+    const refreshToken = jwt.sign(
+      payload,
+      process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret',
+      {
+        expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
+      },
+    );
+
+    // ✅ Save refresh token in DB
+    await this.usersService.setRefreshToken(user.id, refreshToken);
+
+    return { accessToken, refreshToken };
+  }
+
+  // ✅ Logout — clear refresh token
+  async logout(userId: number) {
+    await this.usersService.setRefreshToken(userId, null);
+    return { message: 'User logged out successfully' };
+  }
+
+  // ✅ Refresh tokens securely
+  async refreshTokens(refreshToken: string) {
+    try {
+      if (!refreshToken) throw new UnauthorizedException('No refresh token provided');
+
+      // Verify refresh token
+      const decoded: any = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret',
+      );
+
+      // Fetch user by token
+      const found = await this.usersService.findByRefreshToken(refreshToken);
+      if (!found) throw new UnauthorizedException('Invalid or expired refresh token');
+
+      // Issue new tokens
+      const payload = { sub: found.id, username: found.username, role: found.role };
+      const accessToken = this.jwtService.sign(payload);
+      const newRefreshToken = jwt.sign(
+        payload,
+        process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret',
+        {
+          expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
+        },
+      );
+
+      // Save new refresh token
+      await this.usersService.setRefreshToken(found.id, newRefreshToken);
+
+      return { accessToken, refreshToken: newRefreshToken };
+    } catch (err) {
+      throw new UnauthorizedException('Could not refresh tokens');
+    }
   }
 }
