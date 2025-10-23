@@ -1,8 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as mysql from 'mysql2/promise';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -18,6 +15,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       waitForConnections: true, 
       connectionLimit: 10,
       queueLimit: 0,
+      ssl: { rejectUnauthorized: false }, // Render uses SSL
     });
     // optional: test connection
         const conn = await this.pool.getConnection();

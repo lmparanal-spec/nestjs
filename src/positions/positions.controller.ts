@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 
 @Controller('positions')
@@ -6,39 +6,29 @@ export class PositionsController {
   constructor(private readonly positionsService: PositionsService) {}
 
   @Get()
-  findAll() {
+  async findAll() {
     return this.positionsService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.positionsService.findOne(id);
-  }
-
   @Post()
-  create(@Body() body: { position_code?: string; position_name?: string }) {
-    if (!body.position_code) throw new BadRequestException('position_code is required');
-    if (!body.position_name) throw new BadRequestException('position_name is required');
-   
-
-    return this.positionsService.create(body);
-  }
-
-  @Put(':id')
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { position_code?: string; position_name?: string; id?: number },
+  async create(
+    @Body('position_code') position_code: string,
+    @Body('position_name') position_name: string,
+    @Body('id') id: number,
   ) {
-    return this.positionsService.update(id, body);
+    return this.positionsService.create(position_code, position_name, id);
   }
 
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.positionsService.remove(id);
+  @Put(':position_id')
+  async update(
+    @Param('position_id') position_id: number,
+    @Body('position_name') position_name: string,
+  ) {
+    return this.positionsService.update(position_id, position_name);
   }
 
-  @Delete()
-  removeAll() {
-    return this.positionsService.removeAll();
+  @Delete(':position_id')
+  async remove(@Param('position_id') position_id: number) {
+    return this.positionsService.remove(position_id);
   }
 }

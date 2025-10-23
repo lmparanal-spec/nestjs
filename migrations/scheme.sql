@@ -8,6 +8,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE TABLE positions (
     position_id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
     position_code VARCHAR(100) NOT NULL,
