@@ -5,6 +5,15 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 @Injectable()
 export class UsersService {
+  deleteUser(arg0: number) {
+    throw new Error('Method not implemented.');
+  }
+  updateUser(arg0: number, body: any) {
+    throw new Error('Method not implemented.');
+  }
+  getAll() {
+    throw new Error('Method not implemented.');
+  }
   constructor(private readonly db: DatabaseService) {}
 
   private pool = () => this.db.getPool();
