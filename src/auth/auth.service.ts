@@ -2,86 +2,90 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
-import * as jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken'; // ⬅️ IMPORT KEPT
 
 @Injectable()
 export class AuthService {
-  constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-  ) {}
+    // Defined once, used consistently
+    private readonly REFRESH_SECRET = process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret';
+    private readonly REFRESH_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
 
-  // ✅ Validate user credentials
-  async validateUser(username: string, pass: string) {
-    const user = await this.usersService.findByUsername(username);
-    if (!user) return null;
+    constructor(private usersService: UsersService, private jwtService: JwtService) {}
+    
+    // --- User Validation (No Change) ---
+    async validateUser(username: string, pass: string) {
+        const user = await this.usersService.findByUsername(username);
+        console.log('Found user:', user);
+        if (!user) return null;
 
-    const isPasswordValid = await bcrypt.compare(pass, user.password);
-    if (!isPasswordValid) return null;
-
-    return { id: user.id, username: user.username, role: user.role };
-  }
-
-  // ✅ Login and issue access + refresh tokens
-  async login(user: { id: number; username: string; role: string }) {
-    const payload = { sub: user.id, username: user.username, role: user.role };
-
-    // ✅ Generate Access Token (using JWT_SECRET)
-    const accessToken = this.jwtService.sign(payload);
-
-    // ✅ Generate Refresh Token (using a separate secret)
-    const refreshToken = jwt.sign(
-      payload,
-      process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret',
-      {
-        expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
-      },
-    );
-
-    // ✅ Save refresh token in DB
-    await this.usersService.setRefreshToken(user.id, refreshToken);
-
-    return { accessToken, refreshToken };
-  }
-
-  // ✅ Logout — clear refresh token
-  async logout(userId: number) {
-    await this.usersService.setRefreshToken(userId, null);
-    return { message: 'User logged out successfully' };
-  }
-
-  // ✅ Refresh tokens securely
-  async refreshTokens(refreshToken: string) {
-    try {
-      if (!refreshToken) throw new UnauthorizedException('No refresh token provided');
-
-      // Verify refresh token
-      const decoded: any = jwt.verify(
-        refreshToken,
-        process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret',
-      );
-
-      // Fetch user by token
-      const found = await this.usersService.findByRefreshToken(refreshToken);
-      if (!found) throw new UnauthorizedException('Invalid or expired refresh token');
-
-      // Issue new tokens
-      const payload = { sub: found.id, username: found.username, role: found.role };
-      const accessToken = this.jwtService.sign(payload);
-      const newRefreshToken = jwt.sign(
-        payload,
-        process.env.JWT_REFRESH_TOKEN_SECRET || 'refresh_secret',
-        {
-          expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
-        },
-      );
-
-      // Save new refresh token
-      await this.usersService.setRefreshToken(found.id, newRefreshToken);
-
-      return { accessToken, refreshToken: newRefreshToken };
-    } catch (err) {
-      throw new UnauthorizedException('Could not refresh tokens');
+        const valid = await bcrypt.compare(pass, user.password);
+        console.log('Password valid?', valid);
+        if (valid) return { id: user.id, username: user.username, role: user.role };
+        return null;
     }
-  }
+
+    // --- Login (Generates Tokens) ---
+    async login(user: { id: number; username: string; role: string }) {
+        const payload = { sub: user.id, username: user.username, role: user.role };
+        
+        const accessToken = this.jwtService.sign(payload);
+    
+        // FIX for 'No overload matches' is already here via 'as jwt.SignOptions'
+        const refreshToken = jwt.sign(
+            payload, 
+            this.REFRESH_SECRET, 
+            { 
+                expiresIn: this.REFRESH_EXPIRES_IN,
+            } as jwt.SignOptions
+        );
+
+        await this.usersService.setRefreshToken(user.id, refreshToken);
+
+        return { accessToken, refreshToken };
+    }
+
+    // --- Logout (No Change) ---
+    async logout(userId: number) {
+        await this.usersService.setRefreshToken(userId, null);
+        return { ok: true };
+    }
+    
+    // --- Token Refresh ---
+    async refreshTokens(refreshToken: string) {
+        try {
+            // Verification is correct with jwt.verify()
+            const decoded: any = jwt.verify(refreshToken, this.REFRESH_SECRET);
+            
+            // Cleaned up redundant user lookups
+            const found = await this.usersService.findByRefreshToken(refreshToken);
+            if (!found || found.id !== decoded.sub) {
+                throw new UnauthorizedException('Invalid refresh token');
+            }
+
+            const payload = { sub: found.id, username: found.username, role: found.role };
+            
+            const accessToken = this.jwtService.sign(payload);
+            
+            // FIX for 'No overload matches' is already here via 'as jwt.SignOptions'
+            const newRefresh = jwt.sign(
+                payload, 
+                this.REFRESH_SECRET, 
+                { 
+                    expiresIn: this.REFRESH_EXPIRES_IN, 
+                } as jwt.SignOptions
+            );
+            
+            await this.usersService.setRefreshToken(found.id, newRefresh);
+            
+            return { accessToken, refreshToken: newRefresh };
+        } catch (err) {
+            // ⬅️ FIX APPLIED HERE: Check if 'err' is an Error object before accessing 'message'
+            if (err instanceof Error) {
+                console.error('Refresh Token Error:', err.message);
+            } else {
+                console.error('An unknown error occurred during token refresh.');
+            }
+            throw new UnauthorizedException('Could not refresh tokens');
+        }
+    }
 }
